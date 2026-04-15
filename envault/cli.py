@@ -1,28 +1,30 @@
-"""CLI entry point for envault using Click."""
+"""CLI entry-point for envault."""
+
+from __future__ import annotations
 
 import sys
-import click
-from envault.vault import VaultError, set_var, delete_var, list_vars
 
-DEFAULT_VAULT = ".envault"
+import click
+
+from envault.vault import VaultError, delete_var, get_var, list_vars, set_var
+from envault.export import ExportError, export_variables, SUPPORTED_FORMATS
 
 
 @click.group()
-@click.version_option("0.1.0", prog_name="envault")
-def cli():
-    """envault — securely manage and sync environment variables."""
+def cli() -> None:
+    """envault — secure environment variable manager."""
 
 
 @cli.command("set")
 @click.argument("key")
 @click.argument("value")
-@click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
-@click.password_option("--password", envvar="ENVAULT_PASSWORD", help="Vault password.")
-def set_command(key, value, vault, password):
-    """Set a KEY=VALUE pair in the vault."""
+@click.option("--vault", default=".envault", show_default=True, help="Vault file path.")
+@click.password_option("--password", prompt="Vault password", help="Vault password.")
+def set_command(key: str, value: str, vault: str, password: str) -> None:
+    """Set KEY to VALUE in the vault."""
     try:
         set_var(vault, password, key, value)
-        click.echo(f"✔ Set '{key}' in {vault}")
+        click.echo(f"✓ Set {key}")
     except VaultError as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
@@ -30,24 +32,24 @@ def set_command(key, value, vault, password):
 
 @cli.command("delete")
 @click.argument("key")
-@click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
-@click.password_option("--password", envvar="ENVAULT_PASSWORD", help="Vault password.")
-def delete_command(key, vault, password):
-    """Delete a KEY from the vault."""
+@click.option("--vault", default=".envault", show_default=True, help="Vault file path.")
+@click.password_option("--password", prompt="Vault password", help="Vault password.")
+def delete_command(key: str, vault: str, password: str) -> None:
+    """Delete KEY from the vault."""
     try:
         delete_var(vault, password, key)
-        click.echo(f"✔ Deleted '{key}' from {vault}")
+        click.echo(f"✓ Deleted {key}")
     except VaultError as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
 
 @cli.command("list")
-@click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
-@click.option("--password", envvar="ENVAULT_PASSWORD", prompt=True, hide_input=True, help="Vault password.")
-@click.option("--show-values", is_flag=True, default=False, help="Print variable values (sensitive).")
-def list_command(vault, password, show_values):
-    """List all keys (and optionally values) stored in the vault."""
+@click.option("--vault", default=".envault", show_default=True, help="Vault file path.")
+@click.option("--show-values", is_flag=True, default=False, help="Reveal values.")
+@click.password_option("--password", prompt="Vault password", help="Vault password.")
+def list_command(vault: str, show_values: bool, password: str) -> None:
+    """List variables stored in the vault."""
     try:
         variables = list_vars(vault, password)
     except VaultError as exc:
@@ -55,15 +57,37 @@ def list_command(vault, password, show_values):
         sys.exit(1)
 
     if not variables:
-        click.echo("Vault is empty.")
+        click.echo("(empty vault)")
         return
 
-    for key, value in sorted(variables.items()):
-        if show_values:
-            click.echo(f"{key}={value}")
-        else:
-            click.echo(key)
+    for key in sorted(variables):
+        display = variables[key] if show_values else "***"
+        click.echo(f"{key}={display}")
 
 
-if __name__ == "__main__":
-    cli()
+@cli.command("export")
+@click.option("--vault", default=".envault", show_default=True, help="Vault file path.")
+@click.option(
+    "--format", "fmt",
+    default="dotenv",
+    show_default=True,
+    type=click.Choice(SUPPORTED_FORMATS),
+    help="Output format.",
+)
+@click.option("--output", "-o", default=None, help="Write to file instead of stdout.")
+@click.password_option("--password", prompt="Vault password", help="Vault password.")
+def export_command(vault: str, fmt: str, output: str | None, password: str) -> None:
+    """Export vault variables to dotenv, shell, or JSON format."""
+    try:
+        variables = list_vars(vault, password)
+        rendered = export_variables(variables, fmt)
+    except (VaultError, ExportError) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+
+    if output:
+        with open(output, "w", encoding="utf-8") as fh:
+            fh.write(rendered)
+        click.echo(f"✓ Exported {len(variables)} variable(s) to {output}")
+    else:
+        click.echo(rendered, nl=False)
