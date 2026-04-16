@@ -72,6 +72,15 @@ def test_read_log_returns_entries(log_file):
     assert entries[1].key == "Y"
 
 
+def test_read_log_entries_are_ordered_chronologically(log_file):
+    """Entries returned by read_log should be in insertion (chronological) order."""
+    for action in ("set", "delete", "export"):
+        record(action, log_path=log_file)
+    entries = read_log(log_path=log_file)
+    actions = [e.action for e in entries]
+    assert actions == ["set", "delete", "export"]
+
+
 def test_clear_log_removes_file(log_file):
     record("set", key="Z", log_path=log_file)
     assert Path(log_file).exists()
