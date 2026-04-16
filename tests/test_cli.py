@@ -48,6 +48,7 @@ def test_list_show_values(runner, tmp_vault):
 # ── export command tests ──────────────────────────────────────────────────────
 
 def _seed_vault(runner, tmp_vault):
+    """Populate a temporary vault with two test key/value pairs."""
     for key, val in [("DB_URL", "postgres://localhost/mydb"), ("TOKEN", "abc123")]:
         runner.invoke(
             cli, ["set", key, val, "--vault", tmp_vault, "--password", "pw", "--password", "pw"]
@@ -87,26 +88,25 @@ def test_export_json_stdout(runner, tmp_vault):
 
 def test_export_to_file(runner, tmp_vault, tmp_path):
     _seed_vault(runner, tmp_vault)
-    out_file = str(tmp_path / "env.json")
+    out_file = str(tmp_path / "env.txt")
     result = runner.invoke(
         cli,
-        ["export", "--vault", tmp_vault, "--format", "json", "-o", out_file,
+        ["export", "--vault", tmp_vault, "--format", "dotenv", "--output", out_file,
          "--password", "pw", "--password", "pw"],
     )
     assert result.exit_code == 0
     assert os.path.exists(out_file)
-    with open(out_file) as fh:
-        parsed = json.load(fh)
-    assert parsed["TOKEN"] == "abc123"
+    content = open(out_file).read()
+    assert 'TOKEN="abc123"' in content
+    assert 'DB_URL="postgres://localhost/mydb"' in content
 
 
-def test_export_empty_vault(runner, tmp_vault):
-    """Exporting an empty vault should succeed and produce empty output."""
-    # create vault first by setting then deleting a key
-    runner.invoke(cli, ["set", "TMP", "v", "--vault", tmp_vault, "--password", "pw", "--password", "pw"])
-    runner.invoke(cli, ["delete", "TMP", "--vault", tmp_vault, "--password", "pw", "--password", "pw"])
+def test_export_wrong_password(runner, tmp_vault):
+    """Export with an incorrect password should fail with a non-zero exit code."""
+    _seed_vault(runner, tmp_vault)
     result = runner.invoke(
-        cli, ["export", "--vault", tmp_vault, "--format", "dotenv", "--password", "pw", "--password", "pw"]
+        cli,
+        ["export", "--vault", tmp_vault, "--format", "dotenv",
+         "--password", "wrong", "--password", "wrong"],
     )
-    assert result.exit_code == 0
-    assert result.output == ""
+    assert result.exit_code != 0
