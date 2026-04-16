@@ -18,8 +18,7 @@ def rotate_group() -> None:
 @click.option(
     "--vault",
     "vault_path",
-    default=".envault",
-    show_default=True,
+    default="._default=True,
     help="Path to the vault file.",
 )
 @click.password_option(
@@ -28,14 +27,22 @@ def rotate_group() -> None:
     confirmation_prompt=False,
     help="Current encryption password.",
 )
-@click.password_option(
-    "--new-password",
+@click--new-password",
     prompt="New vault password",
     help="New encryption password (prompted twice for confirmation).",
 )
 def rotate_command(vault_path: str, old_password: str, new_password: str) -> None:
     """Re-encrypt the vault with a new password."""
     path = Path(vault_path)
+
+    if not path.exists():
+        raise click.ClickException(f"Vault file not found: {path}")
+
+    if old_password == new_password:
+        raise click.ClickException(
+            "New password must differ from the current password."
+        )
+
     try:
         count = rotate_key(path, old_password, new_password)
     except RotateError as exc:
