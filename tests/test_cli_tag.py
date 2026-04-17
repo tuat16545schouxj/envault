@@ -18,38 +18,42 @@ def tmp_vault(tmp_path):
     return path
 
 
-def _args(vault, cmd_args):
-    return ["--vault", vault, "--password", PASSWORD] + cmd_args
+def _invoke(runner, tmp_vault, *cmd_args):
+    """Helper to invoke tag_group with vault and password options."""
+    return runner.invoke(
+        tag_group,
+        list(cmd_args) + ["--vault", tmp_vault, "--password", PASSWORD],
+    )
 
 
 def test_add_tag_output(runner, tmp_vault):
-    result = runner.invoke(tag_group, ["add", "DB_URL", "infra"] + ["--vault", tmp_vault, "--password", PASSWORD])
+    result = _invoke(runner, tmp_vault, "add", "DB_URL", "infra")
     assert result.exit_code == 0
     assert "added" in result.output
 
 
 def test_remove_tag_output(runner, tmp_vault):
-    runner.invoke(tag_group, ["add", "TOKEN", "auth", "--vault", tmp_vault, "--password", PASSWORD])
-    result = runner.invoke(tag_group, ["remove", "TOKEN", "auth", "--vault", tmp_vault, "--password", PASSWORD])
+    _invoke(runner, tmp_vault, "add", "TOKEN", "auth")
+    result = _invoke(runner, tmp_vault, "remove", "TOKEN", "auth")
     assert result.exit_code == 0
     assert "removed" in result.output
 
 
 def test_list_no_tags(runner, tmp_vault):
-    result = runner.invoke(tag_group, ["list", "--vault", tmp_vault, "--password", PASSWORD])
+    result = _invoke(runner, tmp_vault, "list")
     assert result.exit_code == 0
     assert "No tags" in result.output
 
 
 def test_list_filter_by_tag(runner, tmp_vault):
-    runner.invoke(tag_group, ["add", "DB_URL", "infra", "--vault", tmp_vault, "--password", PASSWORD])
-    runner.invoke(tag_group, ["add", "TOKEN", "infra", "--vault", tmp_vault, "--password", PASSWORD])
-    result = runner.invoke(tag_group, ["list", "--vault", tmp_vault, "--password", PASSWORD, "--tag", "infra"])
+    _invoke(runner, tmp_vault, "add", "DB_URL", "infra")
+    _invoke(runner, tmp_vault, "add", "TOKEN", "infra")
+    result = _invoke(runner, tmp_vault, "list", "--tag", "infra")
     assert "DB_URL" in result.output
     assert "TOKEN" in result.output
 
 
 def test_add_missing_key_error(runner, tmp_vault):
-    result = runner.invoke(tag_group, ["add", "NOPE", "x", "--vault", tmp_vault, "--password", PASSWORD])
+    result = _invoke(runner, tmp_vault, "add", "NOPE", "x")
     assert result.exit_code != 0
     assert "not found" in result.output
